@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>在线 PS1 提示符生成器</title>
+    <style>
+      body {
+        font-family: "Courier New", monospace;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .preview {
+        background-color: #222;
+        color: #eee;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 10px 0;
+        min-height: 60px;
+        white-space: pre;
+      }
+      .control-panel {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .color-option {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        cursor: pointer;
+      }
+      button {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      textarea {
+        width: 100%;
+        height: 100px;
+        margin-top: 10px;
+        font-family: monospace;
+      }
+      .reset-btn {
+        background: #f44336;
+        margin-left: 10px;
+      }
+      .section {
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+      }
+      .selected {
+        border: 2px solid #000;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PS1 提示符生成器</h1>
+
+    <div class="preview" id="ps1-preview">
+      <!-- 动态预览将显示在这里 -->
+    </div>
+
+    <div class="control-panel">
+      <div class="section">
+        <h3>1. 文字样式</h3>
+        <div>
+          <label><input type="checkbox" name="style" value="1" /> 粗体</label>
+          <label><input type="checkbox" name="style" value="4" /> 下划线</label>
+          <label><input type="checkbox" name="style" value="5" /> 闪烁</label>
+          <label><input type="checkbox" name="style" value="7" /> 反显</label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>2. 颜色设置</h3>
+        <div>
+          <strong>默认文字颜色：</strong>
+          <div id="text-colors">
+            <!-- 通过JS动态生成 -->
+          </div>
+
+          <strong>默认背景颜色：</strong>
+          <div id="bg-colors">
+            <!-- 通过JS动态生成 -->
+          </div>
+
+          <strong>主机名颜色：</strong>
+          <div id="host-colors">
+            <!-- 通过JS动态生成 -->
+          </div>
+
+          <strong>路径颜色：</strong>
+          <div id="path-colors">
+            <!-- 通过JS动态生成 -->
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>3. 内容模板</h3>
+        <select id="content-template">
+          <option value="\u@\h \w">用户名@主机 路径 (\u@\h \w)</option>
+          <option value="\w">仅路径 (\w)</option>
+          <option value="custom">自定义</option>
+        </select>
+        <textarea
+          id="custom-content"
+          placeholder="输入自定义内容..."
+          style="display: none"
+        ></textarea>
+      </div>
+
+      <div class="section">
+        <h3>4. 其他选项</h3>
+        <label><input type="checkbox" id="newline" /> 换行显示</label>
+      </div>
+
+      <div class="section">
+        <h3>5. 生成的 PS1 代码</h3>
+        <textarea id="ps1-output" readonly></textarea>
+      </div>
+
+      <button id="reset-btn" class="reset-btn">重置样式</button>
+    </div>
+
+    <script>
+      // 颜色定义
+      const colors = [
+        { name: "黑", code: "30", bg: "40", hex: "#000000" },
+        { name: "红", code: "31", bg: "41", hex: "#cc0000" },
+        { name: "绿", code: "32", bg: "42", hex: "#4e9a06" },
+        { name: "黄", code: "33", bg: "43", hex: "#c4a000" },
+        { name: "蓝", code: "34", bg: "44", hex: "#3465a4" },
+        { name: "紫", code: "35", bg: "45", hex: "#75507b" },
+        { name: "青", code: "36", bg: "46", hex: "#06989a" },
+        { name: "白", code: "37", bg: "47", hex: "#d3d7cf" },
+      ];
+
+      // 初始化颜色选择器
+      function initColorPickers() {
+        const textColorsDiv = document.getElementById("text-colors");
+        const bgColorsDiv = document.getElementById("bg-colors");
+        const hostColorsDiv = document.getElementById("host-colors");
+        const pathColorsDiv = document.getElementById("path-colors");
+
+        colors.forEach((color) => {
+          // 默认文字颜色选择
+          const textDiv = document.createElement("div");
+          textDiv.className = "color-option";
+          textDiv.style.backgroundColor = color.hex;
+          textDiv.dataset.code = color.code;
+          textDiv.dataset.type = "text";
+          textDiv.title = color.name;
+          textColorsDiv.appendChild(textDiv);
+
+          // 默认背景颜色选择
+          const bgDiv = document.createElement("div");
+          bgDiv.className = "color-option";
+          bgDiv.style.backgroundColor = color.hex;
+          bgDiv.dataset.code = color.bg;
+          bgDiv.dataset.type = "bg";
+          bgDiv.title = color.name + "背景";
+          bgColorsDiv.appendChild(bgDiv);
+
+          // 主机名颜色选择
+          const hostDiv = document.createElement("div");
+          hostDiv.className = "color-option";
+          hostDiv.style.backgroundColor = color.hex;
+          hostDiv.dataset.code = color.code;
+          hostDiv.dataset.type = "host";
+          hostDiv.title = color.name + "主机名";
+          hostColorsDiv.appendChild(hostDiv);
+
+          // 路径颜色选择
+          const pathDiv = document.createElement("div");
+          pathDiv.className = "color-option";
+          pathDiv.style.backgroundColor = color.hex;
+          pathDiv.dataset.code = color.code;
+          pathDiv.dataset.type = "path";
+          pathDiv.title = color.name + "路径";
+          pathColorsDiv.appendChild(pathDiv);
+        });
+      }
+
+      // 处理颜色选择
+      document.addEventListener("click", function (e) {
+        if (e.target.classList.contains("color-option")) {
+          const type = e.target.dataset.type;
+          const code = e.target.dataset.code;
+
+          // 移除之前的选择
+          document
+            .querySelectorAll(`.color-option[data-type="${type}"].selected`)
+            .forEach((el) => el.classList.remove("selected"));
+
+          // 添加新选择
+          e.target.classList.add("selected");
+          updatePreview();
+        }
+      });
+
+      // 内容模板切换
+      document
+        .getElementById("content-template")
+        .addEventListener("change", function () {
+          const customContent = document.getElementById("custom-content");
+          customContent.style.display =
+            this.value === "custom" ? "block" : "none";
+          updatePreview();
+        });
+
+      // 更新预览
+      function updatePreview() {
+        const defaultContent = "user@host ~/path";
+        const defaultPrompt = "$ ";
+
+        const styles = Array.from(
+          document.querySelectorAll('input[name="style"]:checked')
+        )
+          .map((el) => el.value)
+          .join(";");
+
+        const textColor = document.querySelector(
+          '.color-option[data-type="text"].selected'
+        )?.dataset.code;
+        const bgColor = document.querySelector(
+          '.color-option[data-type="bg"].selected'
+        )?.dataset.code;
+
+        const hostColor = document.querySelector(
+          '.color-option[data-type="host"].selected'
+        )?.dataset.code;
+
+        const pathColor = document.querySelector(
+          '.color-option[data-type="path"].selected'
+        )?.dataset.code;
+
+        const template = document.getElementById("content-template").value;
+        let content =
+          template === "custom"
+            ? document.getElementById("custom-content").value
+            : template;
+
+        const newline = document.getElementById("newline").checked;
+        let displayContent = content;
+        let ps1Content = content;
+
+        if (newline) {
+          // 预览显示用实际换行
+          displayContent = `${content}`;
+          // PS1代码用转义的\n
+          ps1Content = `${content}\\n`;
+        } else {
+          // 非换行模式末尾加空格
+          displayContent = `${content} `;
+          ps1Content = `${content} `;
+        }
+
+        // 替换占位符用于预览显示
+        displayContent = displayContent
+          .replace(/\\u@\\h/g, "user@host") // 将\u@\h作为一个整体替换
+          .replace(/\\w/g, "~/path");
+
+        // 构建默认样式
+        const defaultStyles = [];
+        if (styles) defaultStyles.push(styles);
+        if (textColor) defaultStyles.push(textColor);
+        if (bgColor) defaultStyles.push(bgColor);
+        const defaultStyle = defaultStyles.join(";");
+
+        // 显示预览（使用CSS模拟ANSI效果）
+        const previewDiv = document.getElementById("ps1-preview");
+        previewDiv.innerHTML = "";
+
+        // 处理内容中的主机名和路径部分
+        const parts = displayContent.split(/(user@host|\~\/path)/);
+
+        parts.forEach((part) => {
+          if (part === "user@host" && hostColor) {
+            const hostSpan = document.createElement("span");
+            hostSpan.textContent = part;
+            const color = colors.find((c) => c.code === hostColor);
+            if (color) hostSpan.style.color = color.hex;
+
+            // 应用全局样式
+            if (styles.includes("1")) hostSpan.style.fontWeight = "bold";
+            if (styles.includes("4"))
+              hostSpan.style.textDecoration = "underline";
+            if (styles.includes("7")) hostSpan.style.filter = "invert(100%)";
+            if (bgColor) {
+              const bg = colors.find((c) => c.bg === bgColor);
+              if (bg) hostSpan.style.backgroundColor = bg.hex;
+            }
+
+            previewDiv.appendChild(hostSpan);
+          } else if (part === "~/path" && pathColor) {
+            const pathSpan = document.createElement("span");
+            pathSpan.textContent = part;
+            const color = colors.find((c) => c.code === pathColor);
+            if (color) pathSpan.style.color = color.hex;
+
+            // 应用全局样式
+            if (styles.includes("1")) pathSpan.style.fontWeight = "bold";
+            if (styles.includes("4"))
+              pathSpan.style.textDecoration = "underline";
+            if (styles.includes("7")) pathSpan.style.filter = "invert(100%)";
+            if (bgColor) {
+              const bg = colors.find((c) => c.bg === bgColor);
+              if (bg) pathSpan.style.backgroundColor = bg.hex;
+            }
+
+            previewDiv.appendChild(pathSpan);
+          } else if (part.trim() !== "") {
+            const defaultSpan = document.createElement("span");
+            defaultSpan.textContent = part;
+
+            // 应用默认CSS样式模拟ANSI效果
+            if (styles.includes("1")) defaultSpan.style.fontWeight = "bold";
+            if (styles.includes("4"))
+              defaultSpan.style.textDecoration = "underline";
+            if (styles.includes("7")) {
+              defaultSpan.style.filter = "invert(100%)";
+            }
+            if (textColor) {
+              const color = colors.find((c) => c.code === textColor);
+              if (color) defaultSpan.style.color = color.hex;
+            }
+            if (bgColor) {
+              const color = colors.find((c) => c.bg === bgColor);
+              if (color) defaultSpan.style.backgroundColor = color.hex;
+            }
+
+            previewDiv.appendChild(defaultSpan);
+          } else {
+            // 对于空格，直接添加文本节点
+            previewDiv.appendChild(document.createTextNode(part));
+          }
+        });
+
+        // 添加提示符
+        if (newline) {
+          previewDiv.appendChild(document.createTextNode("\n$ "));
+        } else {
+          previewDiv.appendChild(document.createTextNode("$ "));
+        }
+
+        // 生成PS1代码
+        let ps1Code = "";
+        if (template === "\\u@\\h \\w") {
+          // 特殊处理用户名@主机 路径模板
+          const parts = ps1Content.split(/(\\u@\\h|\\w)/); // 将\u@\h作为一个整体匹配
+
+          let result = "";
+          parts.forEach((part) => {
+            if (part === "\\u@\\h" && hostColor) {
+              result += `\\e[${defaultStyle};${hostColor}m${part}\\e[0m`;
+            } else if (part === "\\w" && pathColor) {
+              result += `\\e[${defaultStyle};${pathColor}m${part}\\e[0m`;
+            } else {
+              result += part;
+            }
+          });
+
+          ps1Code = `export PS1="${result}\\$ "`;
+        } else {
+          // 其他模板
+          ps1Code = `export PS1="${ps1Content}\\$ "`;
+        }
+
+        document.getElementById("ps1-output").value = ps1Code;
+
+        // 当没有任何样式时显示默认预览
+        if (!styles && !textColor && !bgColor && !hostColor && !pathColor) {
+          previewDiv.innerHTML =
+            defaultContent + (newline ? "\n" : " ") + defaultPrompt;
+        }
+      }
+
+      function resetAll() {
+        // 1. 重置文字样式
+        document.querySelectorAll('input[name="style"]').forEach((checkbox) => {
+          checkbox.checked = false;
+        });
+
+        // 2. 重置颜色选择
+        document.querySelectorAll(".color-option.selected").forEach((el) => {
+          el.classList.remove("selected");
+        });
+
+        // 3. 重置内容模板
+        const templateSelect = document.getElementById("content-template");
+        templateSelect.value = "\\u@\\h \\w";
+        document.getElementById("custom-content").style.display = "none";
+        document.getElementById("custom-content").value = "";
+
+        // 4. 重置换行选项
+        document.getElementById("newline").checked = false;
+
+        // 5. 更新预览
+        updatePreview();
+      }
+
+      // 初始化
+      initColorPickers();
+
+      // 绑定事件
+      document
+        .querySelectorAll('input[type="checkbox"], #custom-content')
+        .forEach((el) => {
+          el.addEventListener("change", updatePreview);
+        });
+
+      document
+        .getElementById("custom-content")
+        .addEventListener("input", updatePreview);
+
+      // 初始预览
+      updatePreview();
+
+      // 页面加载时也重置一次确保初始状态
+      window.addEventListener("DOMContentLoaded", () => {
+        resetAll();
+        document
+          .getElementById("reset-btn")
+          .addEventListener("click", resetAll);
+      });
+    </script>
+  </body>
+</html>
